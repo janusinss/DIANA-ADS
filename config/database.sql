@@ -76,3 +76,12 @@ CREATE TABLE IF NOT EXISTS admin_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
 );
+-- DEFAULT ADMIN USER (Password: admin123)
+INSERT INTO users (username, email, password, role)
+VALUES (
+        'admin',
+        'admin@quicknote.com',
+        '$2y$10$3HCpIsNgj5FtG/F21eIR1uI1BDV7W2q9C',
+        'admin'
+    ) ON DUPLICATE KEY
+UPDATE role = 'admin';
