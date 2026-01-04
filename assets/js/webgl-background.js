@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
             precision mediump float;
             uniform vec2 u_resolution;
             uniform float u_time;
+            uniform float u_contrast; // New uniform
             float random (in vec2 st) { return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123); }
             float noise (in vec2 st) {
                 vec2 i = floor(st); vec2 f = fract(st);
@@ -53,7 +54,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 color = mix(colorBlack, colorDarkGreen, clamp((f*f)*4.0,0.0,1.0));
                 color = mix(color, colorVibrant, clamp(length(q),0.0,1.0));
                 color = mix(color, vec3(0.0, 0.0, 0.0), clamp(length(r.x),0.0,1.0));
-                gl_FragColor = vec4((f*f*f+.6*f*f+.5*f)*color * 1.0, 1.0);
+                
+                // Apple contrast
+                vec3 finalColor = (f*f*f+.6*f*f+.5*f)*color * 1.0;
+                finalColor = (finalColor - 0.5) * u_contrast + 0.5 + 0.05; // Simple contrast + brightness bump
+                
+                gl_FragColor = vec4(finalColor, 1.0);
             }
         `;
     function createShader(gl, type, source) {
@@ -76,14 +82,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const posLoc = gl.getAttribLocation(program, "aVertexPosition");
     const resLoc = gl.getUniformLocation(program, "u_resolution");
     const timeLoc = gl.getUniformLocation(program, "u_time");
+    const contrastLoc = gl.getUniformLocation(program, "u_contrast");
+
     function render(time) {
       time *= 0.001;
+
+      // Get contrast from CSS
+      const contrastVal =
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue(
+            "--shader-contrast"
+          )
+        ) || 1.2;
+
       gl.useProgram(program);
       gl.enableVertexAttribArray(posLoc);
       gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
       gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
       gl.uniform2f(resLoc, canvas.width, canvas.height);
       gl.uniform1f(timeLoc, time);
+      gl.uniform1f(contrastLoc, contrastVal);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       requestAnimationFrame(render);
     }

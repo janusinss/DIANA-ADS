@@ -840,3 +840,20 @@ window.deleteAttachment = function (id) {
       }
     });
 };
+
+window.openDeleteNotebookModal = function (url) {
+  const modal = document.getElementById('delete-notebook-modal');
+  const btn = document.getElementById('btn-confirm-delete-notebook');
+
+  if (modal && btn) {
+    btn.onclick = function () {
+      window.location.href = url;
+    };
+    modal.classList.add('show');
+  }
+};
+
+window.closeDeleteNotebookModal = function () {
+  const modal = document.getElementById('delete-notebook-modal');
+  if (modal) modal.classList.remove('show');
+};

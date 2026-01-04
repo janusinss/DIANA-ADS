@@ -602,7 +602,9 @@ elseif ($view_mode == 'notes')
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Create new notebook</h3>
-                <button class="close-modal" onclick="closeModal()">×</button>
+                <button class="close-modal" onclick="closeModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
             <p class="modal-desc">Notebooks are useful for grouping notes around a common topic. They can be private or
                 shared.</p>
@@ -641,7 +643,9 @@ elseif ($view_mode == 'notes')
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Edit Notebook</h3>
-                <button class="close-modal" onclick="closeEditModal()">×</button>
+                <button class="close-modal" onclick="closeEditModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
             <p class="modal-desc">Update your notebook details.</p>
 
@@ -721,6 +725,26 @@ elseif ($view_mode == 'notes')
         </div>
     </div>
 
+    <!-- DELETE NOTEBOOK MODAL -->
+    <div id="delete-notebook-modal" class="modal-overlay">
+        <div class="modal-content" style="width: 400px; text-align:center;">
+             <div class="modal-header" style="justify-content:center; flex-direction:column; align-items:center; gap:10px;">
+                <div style="background:rgba(231, 76, 60, 0.1); padding:15px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                    </svg>
+                </div>
+                <h3>Delete Notebook?</h3>
+            </div>
+            <p class="modal-desc" style="margin-bottom:30px;">Are you sure you want to move this notebook to trash? All notes inside will also be moved to trash.</p>
+
+            <div class="modal-actions" style="justify-content:center; gap:15px;">
+                <button type="button" class="btn-modal-cancel" onclick="closeDeleteNotebookModal()">Cancel</button>
+                <button type="button" class="btn-modal-create" id="btn-confirm-delete-notebook" style="background:#e74c3c; color:white; border:none; box-shadow:0 4px 15px rgba(231, 76, 60, 0.3);">Move to Trash</button>
+            </div>
+        </div>
+    </div>
+
     <div class="dashboard-container">
 
         <div class="sidebar">
@@ -734,6 +758,8 @@ elseif ($view_mode == 'notes')
                 </span>
                 <span class="brand-text">QuickNote</span>
             </div>
+
+
 
             <!-- SEARCH (Moved up) -->
             <!-- SEARCH (Moved up) -->
@@ -804,6 +830,31 @@ elseif ($view_mode == 'notes')
                     </span> Trash
                 </a>
             </div>
+
+            <!-- ADMIN LINK (Moved to Bottom) -->
+            <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
+                <div style="margin-top: auto; padding-top: 10px; margin-bottom: 10px;">
+                     <a href="admin_dashboard.php" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 100%;
+                        background: rgba(0, 210, 106, 0.1);
+                        color: #00d26a;
+                        text-align: center;
+                        padding: 10px;
+                        border-radius: 8px;
+                        font-size: 0.85rem;
+                        font-weight: 700;
+                        border: 1px solid rgba(0, 210, 106, 0.3);
+                        letter-spacing: 0.5px;
+                        text-decoration: none;
+                        transition: 0.2s;
+                    ">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> ADMIN PANEL
+                    </a>
+                </div>
+            <?php endif; ?>
 
             <!-- USER PROFILE (Redesign: Avatar | Name | Logout Icon) -->
             <div class="user-profile-bottom">
@@ -888,7 +939,7 @@ elseif ($view_mode == 'notes')
                                         <a href="dashboard.php?notebook=<?php echo $nb['id']; ?>" class="action-item">Open</a>
                                         <a href="javascript:void(0)" onclick="editNotebook(<?php echo $nb['id']; ?>, '<?php echo addslashes($nb['name']); ?>', '<?php echo $nb['cover_photo'] ? addslashes($nb['cover_photo']) : ''; ?>')" class="action-item">Edit</a>
                                         <hr style="border:0; border-top:1px solid #3d3d3d; margin:4px 0;">
-                                        <a href="dashboard.php?trash_notebook=<?php echo $nb['id']; ?>&from_list=1" onclick="return confirm('Move notebook to trash?')" class="action-item delete">Delete</a>
+                                        <a href="javascript:void(0)" onclick="openDeleteNotebookModal('dashboard.php?trash_notebook=<?php echo $nb['id']; ?>&from_list=1')" class="action-item delete">Delete</a>
                                     </div>
                                 </div>
                             </div>
@@ -1178,14 +1229,18 @@ elseif ($view_mode == 'notes')
                         <div class="editor-actions">
                             <?php if ($view_mode == 'trash'): ?>
                                 <input type="hidden" name="is_trash_mode" value="1">
-                                <?php if ($current_id): ?>
-                                    <span style="color:orange; font-size:0.9rem; margin-right:10px;">⚠ In Trash</span>
-                                    <a href="dashboard.php?restore_id=<?php echo $current_id; ?>" class="btn-save-pill"
-                                        style="border-color:var(--accent-green);">Restore</a>
-                                    <a href="dashboard.php?delete_forever=<?php echo $current_id; ?>"
-                                        onclick="return confirm('Permanently delete?')" class="btn-save-pill"
-                                        style="color:red; border-color:red;">Delete</a>
-                                <?php endif; ?>
+                                    <span class="badge-trash-warning">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                        In Trash
+                                    </span>
+                                    <a href="dashboard.php?restore_id=<?php echo $current_id; ?>" class="btn-action-restore">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                                        Restore
+                                    </a>
+                                    <a href="javascript:void(0)" onclick="openDeleteForeverModal('dashboard.php?delete_forever=<?php echo $current_id; ?>')" class="btn-action-delete">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                        Delete
+                                    </a>
                             <?php else: ?>
 
                                 <?php
@@ -1322,7 +1377,9 @@ elseif ($view_mode == 'notes')
                                     <?php else: ?>
                                         <a href="<?php echo htmlspecialchars($att['file_path']); ?>" target="_blank" style="color:#ddd; text-decoration:none; margin-right:8px;"><?php echo htmlspecialchars($att['original_name']); ?></a>
                                     <?php endif; ?>
-                                    <span style="cursor:pointer; color:#888;" onclick="deleteAttachment(<?php echo $att['id']; ?>)">×</span>
+                                    <span style="cursor:pointer; color:#888; display:flex; align-items:center;" onclick="deleteAttachment(<?php echo $att['id']; ?>)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </span>
                                 </div>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -1345,7 +1402,9 @@ elseif ($view_mode == 'notes')
     <!-- Image Preview Modal -->
     <div id="verify-image-modal" class="modal-overlay" onclick="closeImageModal()">
         <div class="img-modal-content" onclick="event.stopPropagation()">
-            <button class="close-img-modal" onclick="closeImageModal()">×</button>
+            <button class="close-img-modal" onclick="closeImageModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
             <img id="preview-img-tag" src="">
             <a id="preview-dl-link" href="" download class="img-download-link">Download Original</a>
         </div>

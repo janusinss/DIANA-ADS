@@ -47,6 +47,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Space+Grotesk:wght@500;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="assets/css/landing.css">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300d26a'%3E%3Ccircle cx='12' cy='12' r='12'/%3E%3C/svg%3E">
     <style>
         body {
             overflow: hidden;
@@ -82,7 +84,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <?php endif; ?>
 
                 <form method="POST" action="">
-                    
+
                     <div class="auth-grid-row">
                         <div class="auth-form-group">
                             <label class="auth-label">Username</label>
@@ -91,7 +93,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                         <div class="auth-form-group">
                             <label class="auth-label">Email Address</label>
-                            <input type="email" name="email" class="auth-input" placeholder="diane@example.com" required>
+                            <input type="email" name="email" class="auth-input" placeholder="diane@example.com"
+                                required>
                         </div>
                     </div>
 
@@ -99,9 +102,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div class="auth-form-group">
                             <label class="auth-label">Password</label>
                             <div class="password-wrapper">
-                                <input type="password" name="password" id="password" class="auth-input" placeholder="••••••••" required>
+                                <input type="password" name="password" id="password" class="auth-input"
+                                    placeholder="••••••••" required>
                                 <span class="toggle-password" onclick="togglePassword('password', this)">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
                                 </span>
                             </div>
                         </div>
@@ -109,9 +118,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <div class="auth-form-group">
                             <label class="auth-label">Confirm Password</label>
                             <div class="password-wrapper">
-                                <input type="password" name="confirm_password" id="confirm_password" class="auth-input" placeholder="••••••••" required>
+                                <input type="password" name="confirm_password" id="confirm_password" class="auth-input"
+                                    placeholder="••••••••" required>
                                 <span class="toggle-password" onclick="togglePassword('confirm_password', this)">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
                                 </span>
                             </div>
                         </div>

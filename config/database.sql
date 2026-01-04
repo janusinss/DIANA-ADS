@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reset_token VARCHAR(255) DEFAULT NULL,
-    reset_expiry DATETIME DEFAULT NULL
+    reset_expiry DATETIME DEFAULT NULL,
+    role ENUM('user', 'admin') DEFAULT 'user'
 );
 -- 2. Create the Notebooks Table
 CREATE TABLE IF NOT EXISTS notebooks (
@@ -64,4 +65,14 @@ CREATE TABLE IF NOT EXISTS attachments (
     original_name VARCHAR(255) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+);
+-- 7. Create Admin Logs Table
+CREATE TABLE IF NOT EXISTS admin_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    admin_id INT NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    target_id INT DEFAULT NULL,
+    details TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
 );

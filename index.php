@@ -18,7 +18,7 @@ session_start();
         rel="stylesheet">
 
     <link rel="stylesheet" href="assets/css/landing.css">
-
+    
     <style>
         body {
             background-color: transparent;

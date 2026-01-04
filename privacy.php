@@ -12,6 +12,8 @@ session_start();
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Space+Grotesk:wght@500;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="assets/css/landing.css">
+        <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300d26a'%3E%3Ccircle cx='12' cy='12' r='12'/%3E%3C/svg%3E">
 </head>
 
 <body>
@@ -82,8 +84,9 @@ session_start();
                 <h2>5. Contact Us</h2>
                 <p>If you have any questions, concerns, or feedback about this Privacy Policy, please strictly contact
                     our privacy team:</p>
-                <p><a href="mailto:dianacastillon@gmail.com"
-                        style="color:var(--accent-primary); text-decoration:none; font-weight:700; font-size:1.2rem;">dianacastillon@gmail.com</a>
+                <p><a href="mailto:dianacast555@gmail.com"
+                        style="color:var(--accent-primary); text-decoration:none; font-weight:700; font-size:1.2rem;">dianacast555@gmail.com
+                    </a>
                 </p>
             </section>
         </main>

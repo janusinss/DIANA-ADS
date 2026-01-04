@@ -18,7 +18,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         try {
             // Allow login via Email OR Username (Case-Insensitive for Username)
-            $sql = "SELECT id, username, password FROM users WHERE email = '$emailOrUser' OR username = '$emailOrUser'";
+            $sql = "SELECT id, username, password, role FROM users WHERE email = '$emailOrUser' OR username = '$emailOrUser'";
             $result = $conn->query($sql);
 
             if ($result->num_rows > 0) {
@@ -26,6 +26,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if (password_verify($password, $row['password'])) {
                     $_SESSION['user_id'] = $row['id'];
                     $_SESSION['username'] = $row['username'];
+                    $_SESSION['role'] = $row['role'] ?? 'user'; // Default to user if null
                     $_SESSION['show_splash'] = true; // Trigger splash screen once
                     header("Location: dashboard.php");
                     exit();
@@ -57,6 +58,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         rel="stylesheet">
 
     <link rel="stylesheet" href="assets/css/landing.css">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300d26a'%3E%3Ccircle cx='12' cy='12' r='12'/%3E%3C/svg%3E">
     <style>
         /* Specific overrides for this page if needed */
         body {

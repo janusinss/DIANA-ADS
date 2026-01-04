@@ -1936,3 +1936,61 @@ a {
   background: rgba(0, 210, 106, 0.1);
   color: #00d26a;
 }
+
+/* --- TRASH VIEW ACTIONS --- */
+.badge-trash-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 165, 0, 0.1);
+  color: orange;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-right: 12px;
+  border: 1px solid rgba(255, 165, 0, 0.2);
+}
+
+.btn-action-restore {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-primary);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+.btn-action-restore:hover {
+  background: #00b359;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 210, 106, 0.2);
+}
+
+.btn-action-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: #e74c3c;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+.btn-action-delete:hover {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  border-color: #e74c3c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15);
+}

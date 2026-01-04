@@ -15,7 +15,7 @@ session_start();
     <style>
         /* Contact Specific Styles */
         body {
-            background-color: #000;
+            background-color: transparent;
             background-image:
                 radial-gradient(circle at 10% 20%, rgba(0, 210, 106, 0.08), transparent 25%),
                 radial-gradient(circle at 90% 80%, rgba(0, 100, 255, 0.05), transparent 25%);
@@ -220,7 +220,7 @@ session_start();
                 <div class="contact-details">
                     <div class="contact-item">
                         <div class="contact-icon">@</div>
-                        <span>dianacastillon@gmail.com</span>
+                        <span>dianacast555@gmail.com</span>
                     </div>
                     <div class="contact-item">
                         <div class="contact-icon">#</div>
