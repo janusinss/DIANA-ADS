@@ -27,17 +27,31 @@ function formatBytes($bytes, $precision = 2)
     return round($bytes, $precision) . ' ' . $units[$pow];
 }
 
+function getDatabaseSize($conn, $dbname)
+{
+    $sql = "SELECT SUM(data_length + index_length) AS size FROM information_schema.TABLES WHERE table_schema = '$dbname'";
+    $result = $conn->query($sql);
+    $row = $result->fetch_assoc();
+    return $row['size'] ?? 0;
+}
+
 $user_id = $_SESSION['user_id'];
 $username = $_SESSION['username'];
 
 // --- STATS LOGIC ---
-$view_user_mode = false; // Kept for compatibility if needed, but likely unused in main dashboard now
-$disk_usage = formatBytes(getFolderSize('uploads'));
+$view_user_mode = false;
+$upload_size = getFolderSize('uploads');
+$db_size = getDatabaseSize($conn, 'quicknote_db'); // Replace with actual DB name from config if dynamic, but hardcoded here or usage of SELECT DATABASE()
+$total_size = $upload_size + $db_size;
+
+$disk_usage = formatBytes($total_size);
 $stats = [
     'users' => $conn->query("SELECT COUNT(*) as c FROM users")->fetch_assoc()['c'],
     'notes' => $conn->query("SELECT COUNT(*) as c FROM notes")->fetch_assoc()['c'],
     'notebooks' => $conn->query("SELECT COUNT(*) as c FROM notebooks")->fetch_assoc()['c'],
-    'storage' => $disk_usage
+    'storage' => $disk_usage,
+    'db_size' => formatBytes($db_size), // Optional for detail
+    'file_size' => formatBytes($upload_size) // Optional for detail
 ];
 
 ?>
