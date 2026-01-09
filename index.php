@@ -103,17 +103,32 @@ session_start();
 
     <section class="features">
         <div class="feature-card">
-            <div class="icon-box">⚡</div>
+            <div class="icon-box">
+                <!-- Lightning Bolt -->
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+            </div>
             <h3>Auto-Save</h3>
             <p>Never lose a thought properly again. We save every keystroke securely to the cloud instantly.</p>
         </div>
         <div class="feature-card">
-            <div class="icon-box">🏷️</div>
+            <div class="icon-box">
+                <!-- Tag / Label -->
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z" />
+                </svg>
+            </div>
             <h3>Smart Tagging</h3>
             <p>Organize your notes with flexible tags. Group ideas, projects, and tasks for effortless retrieval.</p>
         </div>
         <div class="feature-card">
-            <div class="icon-box">📎</div>
+            <div class="icon-box">
+                <!-- Paperclip -->
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" />
+                </svg>
+            </div>
             <h3>Rich Media</h3>
             <p>Upload images, PDFs, and documents directly into your notes. Visual and functional.</p>
         </div>

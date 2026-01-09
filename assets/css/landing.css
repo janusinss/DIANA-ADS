@@ -611,9 +611,18 @@ body:has(form[action*="register"]) .auth-header p {
   transition: 0.3s;
   background: transparent;
   border: none;
-  width: auto;
-  height: auto;
-  text-shadow: 0 0 30px var(--accent-glow);
+  /* text-shadow: 0 0 30px var(--accent-glow); -- Replaced by drop-shadow filter for SVGs */
+  filter: drop-shadow(0 0 15px var(--accent-glow));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-box svg {
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+  transition: all 0.3s ease;
 }
 
 .feature-card:hover .icon-box {
