@@ -109,11 +109,12 @@ if (isset($_POST['save_note'])) {
                     continue;
 
                 // Check/Create Tag
-                $tag_res = $conn->query("SELECT id FROM tags WHERE name='$tag_name'");
+                // Scoped to USER to prevent using other users' tags
+                $tag_res = $conn->query("SELECT id FROM tags WHERE name='$tag_name' AND user_id=$user_id");
                 if ($tag_res && $tag_res->num_rows > 0) {
                     $tag_id = $tag_res->fetch_assoc()['id'];
                 } else {
-                    $conn->query("INSERT INTO tags (name) VALUES ('$tag_name')");
+                    $conn->query("INSERT INTO tags (name, user_id) VALUES ('$tag_name', $user_id)");
                     $tag_id = $conn->insert_id;
                 }
                 // Link
