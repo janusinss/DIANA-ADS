@@ -170,7 +170,8 @@ if (isset($_GET['view_user_id'])) {
         }
     }
 } else {
-    $users_res = $conn->query("SELECT * FROM users ORDER BY created_at DESC");
+    // Use View (ADS Requirement)
+    $users_res = $conn->query("SELECT * FROM view_user_activity ORDER BY created_at DESC");
 }
 ?>
 <!DOCTYPE html>
@@ -281,6 +282,7 @@ if (isset($_GET['view_user_id'])) {
                             <th>ID</th>
                             <th>User Profile</th>
                             <th>Role</th>
+                            <th>Storage</th>
                             <th>Joined Date</th>
                             <th>Actions</th>
                         </tr>
@@ -302,6 +304,8 @@ if (isset($_GET['view_user_id'])) {
                                         <?php echo strtoupper($row['role']); ?>
                                     </span>
                                 </td>
+                                <td style="font-family: monospace; color: var(--accent-primary);">
+                                    <?php echo $row['storage_used'] ?? '0 B'; ?></td>
                                 <td><?php echo date('M d, Y', strtotime($row['created_at'])); ?></td>
                                 <td>
                                     <div style="display: flex; gap: 8px;">

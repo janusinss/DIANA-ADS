@@ -111,7 +111,7 @@ $logs_res = $conn->query("SELECT l.*, u.username as admin_name FROM admin_logs l
                     <thead>
                         <tr>
                             <th style="width: 20%;">Time</th>
-                            <th style="width: 25%;">Admin</th>
+                            <th style="width: 25%;">User</th>
                             <th style="width: 25%;">Action</th>
                             <th style="width: 30%;">Details</th>
                         </tr>

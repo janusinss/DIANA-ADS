@@ -7,7 +7,7 @@ $whitelist = array('127.0.0.1', '::1', 'localhost');
 $remote_addr = $_SERVER['REMOTE_ADDR'] ?? '';
 $server_name = $_SERVER['SERVER_NAME'] ?? '';
 
-if (in_array($remote_addr, $whitelist) || $server_name == 'localhost') {
+if (php_sapi_name() === 'cli' || in_array($remote_addr, $whitelist) || $server_name == 'localhost') {
     // Localhost (XAMPP)
     $servername = "localhost";
     $username = "root";

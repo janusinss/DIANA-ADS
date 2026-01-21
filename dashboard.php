@@ -12,7 +12,7 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Cache-Control: post-check=0, pre-check=0", false);
 header("Pragma: no-cache");
 
-if(!isset($_SESSION['user_id'])) {
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
@@ -83,16 +83,21 @@ if (isset($_POST['save_note'])) {
 
     if ($id != '') {
         $sql = "UPDATE notes SET title='$title', title_style='$title_style', content_style='$content_style', content='$content', notebook_id=$nb_sql WHERE id=$id AND user_id=$user_id";
-    } else {
-        $sql = "INSERT INTO notes (title, title_style, content_style, content, notebook_id, user_id) VALUES ('$title', '$title_style', '$content_style', '$content', $nb_sql, $user_id)";
-    }
-
-    // Execute Save/Update
-    if ($id != '') { // Update Mode
         $conn->query($sql);
-    } else { // Insert Mode
+    } else {
+        // Use Stored Procedure for Insert (ADS Requirement)
+        // Check if nb_sql is "NULL" (string) or a quoted number
+        $proc_nb_id = ($nb_sql === "NULL") ? "0" : str_replace("'", "", $nb_sql);
+
+        // Escape content is already done above, but for Procedure call in query string we need care.
+        // Since we are building a string, 'content' is already escaped.
+
+        $sql = "CALL sp_create_note($user_id, $proc_nb_id, '$title', '$title_style', '$content_style', '$content', '', @new_id)";
         if ($conn->query($sql) === TRUE) {
-            $id = $conn->insert_id; // Capture new ID
+            $res = $conn->query("SELECT @new_id as id");
+            if ($row = $res->fetch_assoc()) {
+                $id = $row['id'];
+            }
         }
     }
 
@@ -138,87 +143,94 @@ if (isset($_POST['save_note'])) {
 }
 
 // --- AJAX: HANDLE FILE UPLOAD ---
-if(isset($_FILES['attachment']) && isset($_POST['note_id'])) {
+if (isset($_FILES['attachment']) && isset($_POST['note_id'])) {
     $note_id = $_POST['note_id'];
     $file = $_FILES['attachment'];
     $upload_dir = 'uploads/';
-    
-    if($file['error'] !== UPLOAD_ERR_OK) {
-        echo json_encode(['status'=>'error', 'message'=>'Upload failed code: '.$file['error']]); exit;
+
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        echo json_encode(['status' => 'error', 'message' => 'Upload failed code: ' . $file['error']]);
+        exit;
     }
-    
+
     $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
     $new_name = uniqid() . '.' . $ext;
     $target_path = $upload_dir . $new_name;
-    
-    if(move_uploaded_file($file['tmp_name'], $target_path)) {
+
+    if (move_uploaded_file($file['tmp_name'], $target_path)) {
         $orig_name = mysqli_real_escape_string($conn, $file['name']);
         $conn->query("INSERT INTO attachments (note_id, file_path, original_name) VALUES ($note_id, '$target_path', '$orig_name')");
         $new_id = $conn->insert_id;
-        echo json_encode(['status'=>'success', 'id'=>$new_id, 'name'=>$orig_name, 'path'=>$target_path]);
+        echo json_encode(['status' => 'success', 'id' => $new_id, 'name' => $orig_name, 'path' => $target_path]);
     } else {
-        echo json_encode(['status'=>'error', 'message'=>'Move failed']);
+        echo json_encode(['status' => 'error', 'message' => 'Move failed']);
     }
     exit();
 }
 
 // --- AJAX: HANDLE FILE DELETE ---
-if(isset($_POST['delete_attachment'])) {
+if (isset($_POST['delete_attachment'])) {
     $att_id = $_POST['att_id'];
     $res = $conn->query("SELECT file_path FROM attachments WHERE id=$att_id");
-    if($row = $res->fetch_assoc()) {
-        if(file_exists($row['file_path'])) unlink($row['file_path']);
+    if ($row = $res->fetch_assoc()) {
+        if (file_exists($row['file_path']))
+            unlink($row['file_path']);
         $conn->query("DELETE FROM attachments WHERE id=$att_id");
-        echo json_encode(['status'=>'success']);
+        echo json_encode(['status' => 'success']);
     } else {
-        echo json_encode(['status'=>'error']);
+        echo json_encode(['status' => 'error']);
     }
     exit();
 }
 
 // --- AJAX: HANDLE FILE UPLOAD ---
-if(isset($_FILES['attachment']) && isset($_POST['note_id'])) {
+if (isset($_FILES['attachment']) && isset($_POST['note_id'])) {
     $note_id = $_POST['note_id'];
 
     // Verify ownership
     $check = $conn->query("SELECT id FROM notes WHERE id=$note_id AND user_id=$user_id");
-    if($check->num_rows == 0) { echo json_encode(['status'=>'error', 'message'=>'Unauthorized']); exit; }
+    if ($check->num_rows == 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
+        exit;
+    }
 
     $file = $_FILES['attachment'];
     $upload_dir = 'uploads/';
-    
-    if($file['error'] !== UPLOAD_ERR_OK) {
-        echo json_encode(['status'=>'error', 'message'=>'Upload failed code: '.$file['error']]); exit;
+
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        echo json_encode(['status' => 'error', 'message' => 'Upload failed code: ' . $file['error']]);
+        exit;
     }
-    
+
     $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
     $new_name = uniqid() . '.' . $ext;
     $target_path = $upload_dir . $new_name;
-    
-    if(move_uploaded_file($file['tmp_name'], $target_path)) {
+
+    if (move_uploaded_file($file['tmp_name'], $target_path)) {
         $orig_name = mysqli_real_escape_string($conn, $file['name']);
         $conn->query("INSERT INTO attachments (note_id, file_path, original_name) VALUES ($note_id, '$target_path', '$orig_name')");
         $new_id = $conn->insert_id;
-        echo json_encode(['status'=>'success', 'id'=>$new_id, 'name'=>$orig_name, 'path'=>$target_path]);
+        echo json_encode(['status' => 'success', 'id' => $new_id, 'name' => $orig_name, 'path' => $target_path]);
     } else {
-        echo json_encode(['status'=>'error', 'message'=>'Move failed']);
+        echo json_encode(['status' => 'error', 'message' => 'Move failed']);
     }
     exit();
 }
 
 // --- AJAX: HANDLE FILE DELETE ---
-if(isset($_POST['delete_attachment'])) {
+if (isset($_POST['delete_attachment'])) {
     $att_id = $_POST['att_id'];
-    
+
     // Check ownership via note
     $check = $conn->query("SELECT a.file_path, a.id FROM attachments a JOIN notes n ON a.note_id = n.id WHERE a.id=$att_id AND n.user_id=$user_id");
-    
-    if($row = $check->fetch_assoc()) {
-        if(file_exists($row['file_path'])) unlink($row['file_path']);
+
+    if ($row = $check->fetch_assoc()) {
+        if (file_exists($row['file_path']))
+            unlink($row['file_path']);
         $conn->query("DELETE FROM attachments WHERE id=$att_id");
-        echo json_encode(['status'=>'success']);
+        echo json_encode(['status' => 'success']);
     } else {
-        echo json_encode(['status'=>'error']);
+        echo json_encode(['status' => 'error']);
     }
     exit();
 }
@@ -226,18 +238,19 @@ if(isset($_POST['delete_attachment'])) {
 // B. CREATE / RENAME NOTEBOOK
 if (isset($_POST['create_notebook'])) {
     $name = mysqli_real_escape_string($conn, $_POST['notebook_name']);
-    
+
     // File Upload Handling
     $cover_path_sql = "NULL";
     if (isset($_FILES['cover_photo']) && $_FILES['cover_photo']['error'] == UPLOAD_ERR_OK) {
         $upload_dir = 'uploads/';
-        if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
-        
+        if (!is_dir($upload_dir))
+            mkdir($upload_dir, 0777, true);
+
         $file = $_FILES['cover_photo'];
         $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
         $new_filename = 'nb_cover_' . uniqid() . '.' . $ext;
         $target_path = $upload_dir . $new_filename;
-        
+
         if (move_uploaded_file($file['tmp_name'], $target_path)) {
             $cover_path_sql = "'$target_path'";
         }
@@ -252,18 +265,19 @@ if (isset($_POST['create_notebook'])) {
 if (isset($_POST['edit_notebook'])) {
     $id = $_POST['notebook_id'];
     $name = mysqli_real_escape_string($conn, $_POST['new_name']);
-    
+
     // File Upload Handling
     $cover_update_sql = "";
     if (isset($_FILES['cover_photo']) && $_FILES['cover_photo']['error'] == UPLOAD_ERR_OK) {
         $upload_dir = 'uploads/';
-        if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
-        
+        if (!is_dir($upload_dir))
+            mkdir($upload_dir, 0777, true);
+
         $file = $_FILES['cover_photo'];
         $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
         $new_filename = 'nb_cover_' . uniqid() . '.' . $ext;
         $target_path = $upload_dir . $new_filename;
-        
+
         if (move_uploaded_file($file['tmp_name'], $target_path)) {
             $cover_update_sql = ", cover_photo='$target_path'";
         }
@@ -300,9 +314,9 @@ if (isset($_GET['delete_notebook_forever'])) {
     $nb_id = $_GET['delete_notebook_forever'];
     // Confirm ownership
     $check = $conn->query("SELECT id FROM notebooks WHERE id=$nb_id AND user_id=$user_id");
-    if($check->num_rows > 0) {
-        $conn->query("DELETE FROM notes WHERE notebook_id=$nb_id");
-        $conn->query("DELETE FROM notebooks WHERE id=$nb_id");
+    if ($check->num_rows > 0) {
+        // Use Stored Procedure for Cascade Delete (ADS Requirement)
+        $conn->query("CALL sp_delete_notebook_cascade($nb_id, $user_id)");
     }
     header("Location: dashboard.php?view=trash");
     exit();
@@ -347,6 +361,10 @@ if (isset($_GET['view'])) {
         $view_mode = 'notes';
         $where_clauses[] = "n.is_trashed = 0";
         $where_clauses[] = "(n.notebook_id IS NULL OR n.notebook_id = 0)";
+    } elseif ($_GET['view'] == 'activity_log') {
+        $view_mode = 'activity_log';
+        // Fetch logs for this user
+        $logs_res = $conn->query("SELECT l.* FROM admin_logs l WHERE l.admin_id = $user_id ORDER BY l.created_at DESC LIMIT 50");
     } elseif ($_GET['view'] == 'notebooks_list') {
         $view_mode = 'notebooks_list';
     }
@@ -426,12 +444,14 @@ if (isset($_GET['edit'])) {
             }
             $current_tags = implode(', ', $tags_list);
         }
-        
+
         // FETCH ATTACHMENTS
         if ($current_id) {
             $att_res = $conn->query("SELECT * FROM attachments WHERE note_id = $current_id ORDER BY created_at ASC");
             $current_attachments = [];
-            while($a_row = $att_res->fetch_assoc()) { $current_attachments[] = $a_row; }
+            while ($a_row = $att_res->fetch_assoc()) {
+                $current_attachments[] = $a_row;
+            }
         }
 
 
@@ -457,8 +477,10 @@ elseif ($view_mode == 'notes')
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard | QuickNote</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300d26a'%3E%3Ccircle cx='12' cy='12' r='12'/%3E%3C/svg%3E">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300d26a'%3E%3Ccircle cx='12' cy='12' r='12'/%3E%3C/svg%3E">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300d26a'%3E%3Ccircle cx='12' cy='12' r='12'/%3E%3C/svg%3E">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300d26a'%3E%3Ccircle cx='12' cy='12' r='12'/%3E%3C/svg%3E">
     <!-- Script moved to assets/js/dashboard.js -->
     <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
     <!-- Quill CSS -->
@@ -506,7 +528,7 @@ elseif ($view_mode == 'notes')
             background-color: #252525;
             border: 1px solid #333;
         }
-        
+
         /* Fix for Custom Font Labels (Visual Update) */
         .ql-snow .ql-picker-label[data-label]::before {
             content: attr(data-label) !important;
@@ -524,13 +546,15 @@ elseif ($view_mode == 'notes')
             width: 100%;
             height: 100%;
             overflow: auto;
-            background-color: rgba(0,0,0,0.8);
+            background-color: rgba(0, 0, 0, 0.8);
             justify-content: center;
             align-items: center;
         }
+
         #verify-image-modal.show {
             display: flex;
         }
+
         .img-modal-content {
             position: relative;
             background-color: #222;
@@ -538,20 +562,23 @@ elseif ($view_mode == 'notes')
             border-radius: 8px;
             max-width: 80%;
             max-height: 80%;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
             text-align: center;
         }
+
         .img-modal-content img {
             max-width: 100%;
             max-height: 70vh;
             border-radius: 4px;
         }
+
         .img-download-link {
             display: block;
             margin-top: 10px;
             color: var(--accent-green);
             text-decoration: none;
         }
+
         .close-img-modal {
             position: absolute;
             top: -15px;
@@ -577,7 +604,9 @@ elseif ($view_mode == 'notes')
         <?php unset($_SESSION['show_splash']); // Show once then remove ?>
         <div id="splash-screen">
             <div class="splash-logo">
-                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="splash-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    class="splash-icon">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                     <polyline points="14 2 14 8 20 8"></polyline>
                     <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -604,7 +633,11 @@ elseif ($view_mode == 'notes')
             <div class="modal-header">
                 <h3>Create new notebook</h3>
                 <button class="close-modal" onclick="closeModal()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
                 </button>
             </div>
             <p class="modal-desc">Notebooks are useful for grouping notes around a common topic. They can be private or
@@ -617,18 +650,27 @@ elseif ($view_mode == 'notes')
                     <input type="text" name="notebook_name" id="modal-nb-name" class="modal-input"
                         placeholder="Notebook name" autocomplete="off" onkeyup="checkInput()">
                 </div>
-                
+
                 <div class="modal-form-group">
                     <label class="modal-form-label">Cover Photo (Optional)</label>
                     <div class="custom-file-wrapper">
                         <label for="create-cover-input" class="custom-file-label">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
                             Upload Cover Image
                         </label>
-                        <input type="file" name="cover_photo" id="create-cover-input" class="custom-file-input" accept="image/*" onchange="previewCover(this, 'create-cover-preview', 'create-file-name')">
+                        <input type="file" name="cover_photo" id="create-cover-input" class="custom-file-input"
+                            accept="image/*" onchange="previewCover(this, 'create-cover-preview', 'create-file-name')">
                         <span id="create-file-name" class="file-name-display"></span>
                     </div>
-                    <div id="create-cover-preview" style="width:100%; height:120px; background-size:cover; background-position:center; margin-top:10px; border-radius:8px; display:none; border:1px solid #333;"></div>
+                    <div id="create-cover-preview"
+                        style="width:100%; height:120px; background-size:cover; background-position:center; margin-top:10px; border-radius:8px; display:none; border:1px solid #333;">
+                    </div>
                 </div>
 
                 <div class="modal-actions">
@@ -645,7 +687,11 @@ elseif ($view_mode == 'notes')
             <div class="modal-header">
                 <h3>Edit Notebook</h3>
                 <button class="close-modal" onclick="closeEditModal()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
                 </button>
             </div>
             <p class="modal-desc">Update your notebook details.</p>
@@ -653,22 +699,29 @@ elseif ($view_mode == 'notes')
             <form action="dashboard.php" method="POST" id="edit-form-modal" enctype="multipart/form-data">
                 <input type="hidden" name="edit_notebook" value="1">
                 <input type="hidden" name="notebook_id" id="edit-modal-id">
-                
+
                 <div class="modal-form-group">
                     <label class="modal-form-label">Name</label>
                     <input type="text" name="new_name" id="edit-modal-val" class="modal-input"
                         placeholder="Notebook name" autocomplete="off" onkeyup="checkEditInput()">
                 </div>
-                
+
                 <div class="modal-form-group">
                     <label class="modal-form-label">Cover Photo</label>
-                    
+
                     <div class="custom-file-wrapper">
                         <label for="edit-cover-input" class="custom-file-label">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
                             Upload Cover Image
                         </label>
-                        <input type="file" name="cover_photo" id="edit-cover-input" class="custom-file-input" accept="image/*" onchange="previewCover(this, 'edit-cover-preview', 'file-name-display')">
+                        <input type="file" name="cover_photo" id="edit-cover-input" class="custom-file-input"
+                            accept="image/*" onchange="previewCover(this, 'edit-cover-preview', 'file-name-display')">
                         <span id="file-name-display" class="file-name-display"></span>
                     </div>
 
@@ -686,20 +739,26 @@ elseif ($view_mode == 'notes')
     <!-- DELETE CONFIRMATION MODAL -->
     <div id="delete-confirm-modal" class="modal-overlay">
         <div class="modal-content" style="width: 400px; text-align:center;">
-             <div class="modal-header" style="justify-content:center; flex-direction:column; align-items:center; gap:10px;">
-                <div style="background:rgba(231, 76, 60, 0.1); padding:15px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:5px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <div class="modal-header"
+                style="justify-content:center; flex-direction:column; align-items:center; gap:10px;">
+                <div
+                    style="background:rgba(231, 76, 60, 0.1); padding:15px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                        stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                     </svg>
                 </div>
                 <h3>Move to Trash?</h3>
             </div>
-            <p class="modal-desc" style="margin-bottom:30px;">Are you sure you want to move this note to trash? You can restore it later.</p>
+            <p class="modal-desc" style="margin-bottom:30px;">Are you sure you want to move this note to trash? You can
+                restore it later.</p>
 
             <div class="modal-actions" style="justify-content:center; gap:15px;">
                 <button type="button" class="btn-modal-cancel" onclick="closeDeleteModal()">Cancel</button>
-                <button type="button" class="btn-modal-create" id="btn-confirm-delete" style="background:#e74c3c; color:white; border:none; box-shadow:0 4px 15px rgba(231, 76, 60, 0.3);">Move to Trash</button>
+                <button type="button" class="btn-modal-create" id="btn-confirm-delete"
+                    style="background:#e74c3c; color:white; border:none; box-shadow:0 4px 15px rgba(231, 76, 60, 0.3);">Move
+                    to Trash</button>
             </div>
         </div>
     </div>
@@ -707,21 +766,28 @@ elseif ($view_mode == 'notes')
     <!-- DELETE FOREVER MODAL -->
     <div id="delete-forever-modal" class="modal-overlay">
         <div class="modal-content" style="width: 400px; text-align:center;">
-             <div class="modal-header" style="justify-content:center; flex-direction:column; align-items:center; gap:10px;">
-                <div style="background:rgba(231, 76, 60, 0.1); padding:15px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:5px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <div class="modal-header"
+                style="justify-content:center; flex-direction:column; align-items:center; gap:10px;">
+                <div
+                    style="background:rgba(231, 76, 60, 0.1); padding:15px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                        stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
                     </svg>
                 </div>
                 <h3>Delete Forever?</h3>
             </div>
-            <p class="modal-desc" style="margin-bottom:30px;">This action cannot be undone. Are you sure you want to permanently delete this?</p>
+            <p class="modal-desc" style="margin-bottom:30px;">This action cannot be undone. Are you sure you want to
+                permanently delete this?</p>
 
             <div class="modal-actions" style="justify-content:center; gap:15px;">
                 <button type="button" class="btn-modal-cancel" onclick="closeDeleteForeverModal()">Cancel</button>
-                <button type="button" class="btn-modal-create" id="btn-confirm-delete-forever" style="background:#e74c3c; color:white; border:none; box-shadow:0 4px 15px rgba(231, 76, 60, 0.3);">Delete Forever</button>
+                <button type="button" class="btn-modal-create" id="btn-confirm-delete-forever"
+                    style="background:#e74c3c; color:white; border:none; box-shadow:0 4px 15px rgba(231, 76, 60, 0.3);">Delete
+                    Forever</button>
             </div>
         </div>
     </div>
@@ -729,19 +795,26 @@ elseif ($view_mode == 'notes')
     <!-- DELETE NOTEBOOK MODAL -->
     <div id="delete-notebook-modal" class="modal-overlay">
         <div class="modal-content" style="width: 400px; text-align:center;">
-             <div class="modal-header" style="justify-content:center; flex-direction:column; align-items:center; gap:10px;">
-                <div style="background:rgba(231, 76, 60, 0.1); padding:15px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:5px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            <div class="modal-header"
+                style="justify-content:center; flex-direction:column; align-items:center; gap:10px;">
+                <div
+                    style="background:rgba(231, 76, 60, 0.1); padding:15px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                        stroke="#e74c3c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
                     </svg>
                 </div>
                 <h3>Delete Notebook?</h3>
             </div>
-            <p class="modal-desc" style="margin-bottom:30px;">Are you sure you want to move this notebook to trash? All notes inside will also be moved to trash.</p>
+            <p class="modal-desc" style="margin-bottom:30px;">Are you sure you want to move this notebook to trash? All
+                notes inside will also be moved to trash.</p>
 
             <div class="modal-actions" style="justify-content:center; gap:15px;">
                 <button type="button" class="btn-modal-cancel" onclick="closeDeleteNotebookModal()">Cancel</button>
-                <button type="button" class="btn-modal-create" id="btn-confirm-delete-notebook" style="background:#e74c3c; color:white; border:none; box-shadow:0 4px 15px rgba(231, 76, 60, 0.3);">Move to Trash</button>
+                <button type="button" class="btn-modal-create" id="btn-confirm-delete-notebook"
+                    style="background:#e74c3c; color:white; border:none; box-shadow:0 4px 15px rgba(231, 76, 60, 0.3);">Move
+                    to Trash</button>
             </div>
         </div>
     </div>
@@ -818,13 +891,28 @@ elseif ($view_mode == 'notes')
                     </span> Notebooks
                 </a>
 
+                <a href="dashboard.php?view=activity_log"
+                    class="nav-item <?php echo ($view_mode == 'activity_log') ? 'active' : ''; ?>">
+                    <span class="nav-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </span> Activity Log
+                </a>
+
                 <a href="dashboard.php?view=trash"
                     class="nav-item <?php echo ($view_mode == 'trash') ? 'active' : ''; ?>">
                     <span class="nav-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                            </path>
                             <line x1="10" y1="11" x2="10" y2="17"></line>
                             <line x1="14" y1="11" x2="14" y2="17"></line>
                         </svg>
@@ -835,7 +923,7 @@ elseif ($view_mode == 'notes')
             <!-- ADMIN LINK (Moved to Bottom) -->
             <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
                 <div style="margin-top: auto; padding-top: 10px; margin-bottom: 10px;">
-                     <a href="admin_dashboard.php" style="
+                    <a href="admin_dashboard.php" style="
                         display: flex;
                         align-items: center;
                         justify-content: center;
@@ -852,7 +940,11 @@ elseif ($view_mode == 'notes')
                         text-decoration: none;
                         transition: 0.2s;
                     ">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> ADMIN PANEL
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            style="margin-right: 6px;">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg> ADMIN PANEL
                     </a>
                 </div>
             <?php endif; ?>
@@ -864,7 +956,12 @@ elseif ($view_mode == 'notes')
                     <span class="user-name-display"><?php echo htmlspecialchars($username); ?></span>
                 </div>
                 <a href="logout.php" class="user-logout-icon-btn" title="Log out">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
                 </a>
             </div>
         </div>
@@ -885,11 +982,11 @@ elseif ($view_mode == 'notes')
                             </button>
                         <?php endif; ?>
 
-                        <form action="dashboard.php" method="GET" class="nb-search-container <?php echo ($total_notebooks_count == 0) ? 'disabled-search' : ''; ?>">
+                        <form action="dashboard.php" method="GET"
+                            class="nb-search-container <?php echo ($total_notebooks_count == 0) ? 'disabled-search' : ''; ?>">
                             <input type="hidden" name="view" value="notebooks_list">
                             <input type="text" name="nb_search" class="nb-search-bar" placeholder="Find Notebooks..."
-                                value="<?php echo htmlspecialchars($nb_search_term); ?>"
-                                <?php echo ($total_notebooks_count == 0) ? 'disabled style="cursor:not-allowed; opacity:0.5;"' : ''; ?>>
+                                value="<?php echo htmlspecialchars($nb_search_term); ?>" <?php echo ($total_notebooks_count == 0) ? 'disabled style="cursor:not-allowed; opacity:0.5;"' : ''; ?>>
                             <span class="nb-search-icon"> </span>
                         </form>
                     </div>
@@ -897,7 +994,7 @@ elseif ($view_mode == 'notes')
 
                 <?php if ($total_notebooks_count > 0): ?>
                     <div class="notebook-grid">
-                        <?php 
+                        <?php
                         // Visual: Pre-defined gradients for covers
                         $gradients = [
                             "linear-gradient(135deg, #FF9A9E 0%, #FECFEF 100%)",
@@ -911,36 +1008,50 @@ elseif ($view_mode == 'notes')
                         ];
                         $grad_count = count($gradients);
                         $i = 0;
-                        
-                        while ($nb = $notebooks_list->fetch_assoc()): 
+
+                        while ($nb = $notebooks_list->fetch_assoc()):
                             $bg_gradient = $gradients[$i % $grad_count];
                             $i++;
-                            
+
                             $has_cover = !empty($nb['cover_photo']);
-                            $cover_style = $has_cover ? "background-image: url('".htmlspecialchars($nb['cover_photo'])."'); background-size: cover; background-position: center;" : "background: $bg_gradient;";
-                        ?>
-                            <div class="notebook-card" onclick="window.location.href='dashboard.php?notebook=<?php echo $nb['id']; ?>'">
+                            $cover_style = $has_cover ? "background-image: url('" . htmlspecialchars($nb['cover_photo']) . "'); background-size: cover; background-position: center;" : "background: $bg_gradient;";
+                            ?>
+                            <div class="notebook-card"
+                                onclick="window.location.href='dashboard.php?notebook=<?php echo $nb['id']; ?>'">
                                 <div class="notebook-cover" style="<?php echo $cover_style; ?>">
-                                    <div class="notebook-card-overlay" style="<?php echo $has_cover ? 'background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);' : ''; ?>"></div>
+                                    <div class="notebook-card-overlay"
+                                        style="<?php echo $has_cover ? 'background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);' : ''; ?>">
+                                    </div>
                                     <span class="nb-card-count"><?php echo $nb['note_count']; ?> Notes</span>
                                 </div>
                                 <div class="notebook-info">
                                     <h3 class="notebook-title"><?php echo htmlspecialchars($nb['name']); ?></h3>
                                     <div class="notebook-meta">
-                                        <span>Updated <?php echo ($nb['updated_at']) ? date('M d', strtotime($nb['updated_at'])) : date('M d', strtotime($nb['created_at'])); ?></span>
+                                        <span>Updated
+                                            <?php echo ($nb['updated_at']) ? date('M d', strtotime($nb['updated_at'])) : date('M d', strtotime($nb['created_at'])); ?></span>
                                     </div>
                                 </div>
-                                
+
                                 <div class="notebook-actions" onclick="event.stopPropagation();">
                                     <button class="action-btn-card" onclick="toggleActionMenu(<?php echo $nb['id']; ?>)">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <circle cx="12" cy="12" r="1"></circle>
+                                            <circle cx="12" cy="5" r="1"></circle>
+                                            <circle cx="12" cy="19" r="1"></circle>
+                                        </svg>
                                     </button>
                                     <!-- Reusing existing dropdown logic/styles but positioned relative to card -->
                                     <div id="menu-<?php echo $nb['id']; ?>" class="action-dropdown card-dropdown">
                                         <a href="dashboard.php?notebook=<?php echo $nb['id']; ?>" class="action-item">Open</a>
-                                        <a href="javascript:void(0)" onclick="editNotebook(<?php echo $nb['id']; ?>, '<?php echo addslashes($nb['name']); ?>', '<?php echo $nb['cover_photo'] ? addslashes($nb['cover_photo']) : ''; ?>')" class="action-item">Edit</a>
+                                        <a href="javascript:void(0)"
+                                            onclick="editNotebook(<?php echo $nb['id']; ?>, '<?php echo addslashes($nb['name']); ?>', '<?php echo $nb['cover_photo'] ? addslashes($nb['cover_photo']) : ''; ?>')"
+                                            class="action-item">Edit</a>
                                         <hr style="border:0; border-top:1px solid #3d3d3d; margin:4px 0;">
-                                        <a href="javascript:void(0)" onclick="openDeleteNotebookModal('dashboard.php?trash_notebook=<?php echo $nb['id']; ?>&from_list=1')" class="action-item delete">Delete</a>
+                                        <a href="javascript:void(0)"
+                                            onclick="openDeleteNotebookModal('dashboard.php?trash_notebook=<?php echo $nb['id']; ?>&from_list=1')"
+                                            class="action-item delete">Delete</a>
                                     </div>
                                 </div>
                             </div>
@@ -955,206 +1066,442 @@ elseif ($view_mode == 'notes')
                 <?php endif; ?>
             </div>
 
-        <?php else: ?>
+        <?php elseif ($view_mode == 'activity_log'): ?>
 
-            <div class="note-list-panel">
-                <div class="note-list-header" style="justify-content: space-between; align-items: center; display: flex;">
+            <div class="notebook-manager-panel" style="padding: 30px !important;">
+                <div class="page-header"
+                    style="margin-bottom: 25px; display:flex; align-items:center; justify-content:space-between;">
                     <div>
-                        <h2 style="display:inline-block; margin-right:10px;">
-                            <?php
-                            if ($view_mode == 'trash')
-                                echo "Trash";
-                            elseif ($view_mode == 'notes')
-                                echo "Notes";
-                            elseif ($view_mode == 'notebook')
-                                echo htmlspecialchars($filter_notebook_name);
-                            elseif ($view_mode == 'search')
-                                echo "Search Results";
-                            else
-                                echo "Home";
-                            ?>
-                        </h2>
-                        <?php if ($view_mode != 'trash'): ?>
-                            <span class="note-count"><?php echo $conn->query($sql_query)->num_rows; ?> notes</span>
-                        <?php endif; ?>
+                        <h1 class="page-title" style="font-size: 1.8rem; font-weight: 700; color: #eee; margin-bottom:5px;">
+                            Activity Log</h1>
+                        <p class="page-subtitle" style="font-size: 0.95rem; color: #888; margin:0;">Recent actions and
+                            events.</p>
                     </div>
+                </div>
 
-                    <?php if ($view_mode == 'notebook'): ?>
-                        <div class="header-actions" style="position:relative;">
-                            <button class="btn-header-menu" onclick="toggleHeaderMenu(event)">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-                            </button>
-                            <div class="action-dropdown header-dropdown" id="header-dropdown-menu">
-                                <a href="javascript:void(0)" onclick="editNotebook(<?php echo $filter_notebook_id; ?>, '<?php echo addslashes($filter_notebook_name); ?>', '<?php echo !empty($notebook_cover_photo) ? addslashes($notebook_cover_photo) : ''; ?>')" class="action-item">
-                                    Edit Notebook
-                                </a>
-                                <div style="height:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
-                                <a href="dashboard.php?trash_notebook=<?php echo $filter_notebook_id; ?>" onclick="return confirm('Move notebook to Trash?')" class="action-item delete">
-                                    Delete Notebook
-                                </a>
+                <style>
+                    /* Tactile Activity Log Styles */
+                    .activity-feed {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 12px;
+                        width: 100%;
+                    }
+
+                    .activity-card {
+                        background: #1e1e1e;
+                        border: 1px solid #333;
+                        border-radius: 8px;
+                        padding: 20px;
+                        display: flex;
+                        align-items: center;
+                        gap: 20px;
+                        transition: all 0.2s ease;
+                        font-family: inherit;
+                        /* Inherits System Font (Outfit) */
+                    }
+
+                    .activity-card:hover {
+                        border-color: #555;
+                        background: #232323;
+                        transform: translateY(-1px);
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+                    }
+
+                    .activity-icon {
+                        width: 42px;
+                        height: 42px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 1.2rem;
+                        flex-shrink: 0;
+                        background: #2a2a2a;
+                        color: #ccc;
+                    }
+
+                    .activity-info {
+                        flex: 1;
+                    }
+
+                    .activity-header {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 4px;
+                    }
+
+                    .activity-action {
+                        font-weight: 600;
+                        font-size: 1.1rem;
+                        /* Bigger */
+                        color: #eee;
+                        text-transform: capitalize;
+                    }
+
+                    .activity-time {
+                        font-size: 0.9rem;
+                        /* Bigger */
+                        color: #777;
+                        white-space: nowrap;
+                    }
+
+                    .activity-details {
+                        font-size: 1rem;
+                        /* Bigger */
+                        color: #aaa;
+                        line-height: 1.5;
+                    }
+
+                    /* Status Styles */
+                    .status-delete {
+                        background: rgba(231, 76, 60, 0.1);
+                        color: #e74c3c;
+                        border: 1px solid rgba(231, 76, 60, 0.2);
+                    }
+
+                    .status-create {
+                        background: rgba(46, 204, 113, 0.1);
+                        color: #2ecc71;
+                        border: 1px solid rgba(46, 204, 113, 0.2);
+                    }
+
+                    .status-update {
+                        background: rgba(52, 152, 219, 0.1);
+                        color: #3498db;
+                        border: 1px solid rgba(52, 152, 219, 0.2);
+                    }
+                </style>
+
+                <div class="activity-feed">
+                    <?php if (isset($logs_res) && $logs_res && $logs_res->num_rows > 0):
+                        while ($log = $logs_res->fetch_assoc()):
+                            $type = strtolower($log['action_type']);
+                            $icon_class = '';
+                            // Icons using simple text/emoji or SVG if preferred, here using SVG for consistency
+                            $icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
+
+                            if (strpos($type, 'delete') !== false || strpos($type, 'remove') !== false || strpos($type, 'trash') !== false) {
+                                $icon_class = 'status-delete';
+                                $icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+                            } elseif (strpos($type, 'create') !== false || strpos($type, 'add') !== false || strpos($type, 'register') !== false || strpos($type, 'restore') !== false) {
+                                $icon_class = 'status-create';
+                                $icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
+                            } elseif (strpos($type, 'login') !== false) {
+                                $icon_class = 'status-update';
+                                $icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>';
+                            }
+
+                            $readable_type = ucwords(str_replace('_', ' ', $type));
+                            ?>
+
+                            <div class="activity-card">
+                                <div class="activity-icon <?php echo $icon_class; ?>">
+                                    <?php echo $icon; ?>
+                                </div>
+                                <div class="activity-info">
+                                    <div class="activity-header">
+                                        <span class="activity-action"><?php echo htmlspecialchars($readable_type); ?></span>
+                                        <span
+                                            class="activity-time"><?php echo date('M d, H:i', strtotime($log['created_at'])); ?></span>
+                                    </div>
+                                    <div class="activity-details"><?php echo htmlspecialchars($log['details']); ?></div>
+                                </div>
                             </div>
+
+                        <?php endwhile; ?>
+
+                    <?php else: ?>
+                        <div style="padding: 60px; text-align: center; color: #555;">
+                            <div style="margin-bottom: 15px; opacity: 0.5;">
+                                <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                                    style="width:48px; height:48px;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                            </div>
+                            <p style="margin:0; font-size:0.95rem;">No activity found.</p>
                         </div>
                     <?php endif; ?>
                 </div>
 
-                <div class="note-items-container">
-                    <?php
-                    $has_items = false;
+            <?php else: ?>
 
-                    // 1. TRASHED NOTEBOOKS SECTION
-                    if ($view_mode == 'trash' && $trashed_notebooks_result && $trashed_notebooks_result->num_rows > 0) {
-                        $has_items = true;
-                        echo "<div class='trash-section-title'>Deleted Notebooks</div>";
-                        echo "<div class='trash-grid'>";
+                <div class="note-list-panel">
+                    <div class="note-list-header"
+                        style="justify-content: space-between; align-items: center; display: flex;">
+                        <div>
+                            <h2 style="display:inline-block; margin-right:10px;">
+                                <?php
+                                if ($view_mode == 'trash')
+                                    echo "Trash";
+                                elseif ($view_mode == 'notes')
+                                    echo "Notes";
+                                elseif ($view_mode == 'notebook')
+                                    echo htmlspecialchars($filter_notebook_name);
+                                elseif ($view_mode == 'search')
+                                    echo "Search Results";
+                                else
+                                    echo "Home";
+                                ?>
+                            </h2>
+                            <?php if ($view_mode != 'trash'): ?>
+                                <span class="note-count"><?php echo $conn->query($sql_query)->num_rows; ?> notes</span>
+                            <?php endif; ?>
+                        </div>
 
-                        while ($nb = $trashed_notebooks_result->fetch_assoc()) {
-                            // Nested notes inside deleted notebook (filtered by user)
-                            $nb_notes_res = $conn->query("SELECT * FROM notes WHERE notebook_id = {$nb['id']} AND user_id=$user_id LIMIT 3");
-                            ?>
-
-                            <div class="trash-card">
-                                <div class="trash-card-header">
-                                    <div class="trash-card-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-                                    </div>
-                                    <h4 class="trash-card-title"><?php echo htmlspecialchars($nb['name']); ?></h4>
-                                </div>
-
-                                <div class="trash-card-body">
-                                    <?php if ($nb_notes_res->num_rows > 0): ?>
-                                        <div class="trash-notes-list">
-                                            <?php while ($n_row = $nb_notes_res->fetch_assoc()): 
-                                                $trash_link = "dashboard.php?edit=" . $n_row['id'] . "&view=trash";
-                                            ?>
-                                                <a href="<?php echo $trash_link; ?>" class="trash-note-item" style="text-decoration:none;">
-                                                    <span class="trash-note-icon">•</span>
-                                                    <span class="trash-note-title"><?php echo $n_row['title'] ? htmlspecialchars($n_row['title']) : 'Untitled'; ?></span>
-                                                </a>
-                                            <?php endwhile; ?>
-                                            <?php if($nb_notes_res->num_rows >= 3) echo "<div class='trash-more-notes'>+ more notes inside</div>"; ?>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="trash-empty-msg">No notes in this notebook</div>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div class="trash-card-actions">
-                                    <a href="dashboard.php?restore_notebook=<?php echo $nb['id']; ?>" class="btn-trash-action restore" title="Restore Notebook">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                                        Restore
+                        <?php if ($view_mode == 'notebook'): ?>
+                            <div class="header-actions" style="position:relative;">
+                                <button class="btn-header-menu" onclick="toggleHeaderMenu(event)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="1"></circle>
+                                        <circle cx="12" cy="5" r="1"></circle>
+                                        <circle cx="12" cy="19" r="1"></circle>
+                                    </svg>
+                                </button>
+                                <div class="action-dropdown header-dropdown" id="header-dropdown-menu">
+                                    <a href="javascript:void(0)"
+                                        onclick="editNotebook(<?php echo $filter_notebook_id; ?>, '<?php echo addslashes($filter_notebook_name); ?>', '<?php echo !empty($notebook_cover_photo) ? addslashes($notebook_cover_photo) : ''; ?>')"
+                                        class="action-item">
+                                        Edit Notebook
                                     </a>
-                                    <a href="javascript:void(0)" onclick="openDeleteForeverModal('dashboard.php?delete_notebook_forever=<?php echo $nb['id']; ?>')" class="btn-trash-action delete" title="Delete Forever">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                        Delete
+                                    <div style="height:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
+                                    <a href="dashboard.php?trash_notebook=<?php echo $filter_notebook_id; ?>"
+                                        onclick="return confirm('Move notebook to Trash?')" class="action-item delete">
+                                        Delete Notebook
                                     </a>
                                 </div>
                             </div>
-                            <?php
-                        }
-                        echo "</div>"; // End grid
-                        echo "<hr style='border:0; border-top:1px solid #333; margin:25px 0;'>";
-                    }
+                        <?php endif; ?>
+                    </div>
 
-                    // 2. TRASHED NOTES SECTION
-                    $result = $conn->query($sql_query);
-                    if ($result->num_rows > 0) {
-                        $has_items = true;
-                        if ($view_mode == 'trash')
-                            echo "<div style='padding:25px 20px 5px; font-size:0.75rem; color:#666; text-transform:uppercase; letter-spacing:1px;'>NOTES</div>";
+                    <div class="note-items-container">
+                        <?php
+                        $has_items = false;
 
-                        while ($row = $result->fetch_assoc()) {
-                            $active_class = ($row['id'] == $current_id) ? 'selected' : '';
-                            $edit_url = "dashboard.php?edit=" . $row['id'];
-                            if ($view_mode == 'notebook')
-                                $edit_url .= "&notebook=" . $filter_notebook_id;
-                            if ($view_mode == 'trash')
-                                $edit_url .= "&view=trash";
-                            if ($view_mode == 'notes')
-                                $edit_url .= "&view=notes";
+                        // 1. TRASHED NOTEBOOKS SECTION
+                        if ($view_mode == 'trash' && $trashed_notebooks_result && $trashed_notebooks_result->num_rows > 0) {
+                            $has_items = true;
+                            echo "<div class='trash-section-title'>Deleted Notebooks</div>";
+                            echo "<div class='trash-grid'>";
 
-                            $trash_url = "dashboard.php?trash_id=" . $row['id'];
-                            if ($view_mode == 'notebook')
-                                $trash_url .= "&notebook=" . $filter_notebook_id;
-                            if ($view_mode == 'notes')
-                                $trash_url .= "&view=notes";
+                            while ($nb = $trashed_notebooks_result->fetch_assoc()) {
+                                // Nested notes inside deleted notebook (filtered by user)
+                                $nb_notes_res = $conn->query("SELECT * FROM notes WHERE notebook_id = {$nb['id']} AND user_id=$user_id LIMIT 3");
+                                ?>
 
-                            $snippet = substr(strip_tags($row['content']), 0, 50);
-                            if (strlen($row['content']) > 50)
-                                $snippet .= "...";
-                            if (!$snippet)
-                                $snippet = "No additional text";
+                                <div class="trash-card">
+                                    <div class="trash-card-header">
+                                        <div class="trash-card-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                            </svg>
+                                        </div>
+                                        <h4 class="trash-card-title"><?php echo htmlspecialchars($nb['name']); ?></h4>
+                                    </div>
 
-                            ?>
-                            <div class="note-item <?php echo $active_class; ?>" onclick="window.location.href='<?php echo $edit_url; ?>'">
-                                <div class="note-item-header" style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-                                    <h4 style="flex-grow:1; margin:0; font-size:0.95rem; font-weight:600; color:#eee; <?php echo htmlspecialchars($row['title_style'] ?? ''); ?>" id="sidebar-title-<?php echo $row['id']; ?>">
-                                        <?php echo $row['title'] ? htmlspecialchars($row['title']) : 'Untitled'; ?>
-                                    </h4>
-                                    
-                                    <div class="note-item-actions" onclick="event.stopPropagation();" style="display:flex; gap:8px;">
-                                        <?php if ($view_mode == 'trash'): ?>
-                                            <!-- Restore -->
-                                            <a href="dashboard.php?restore_id=<?php echo $row['id']; ?>" class="action-icon-btn restore" title="Restore">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                                            </a>
-                                            <!-- Delete Forever -->
-                                            <a href="javascript:void(0)" onclick="openDeleteForeverModal('dashboard.php?delete_forever=<?php echo $row['id']; ?>')" class="action-icon-btn delete" title="Delete Forever">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                            </a>
+                                    <div class="trash-card-body">
+                                        <?php if ($nb_notes_res->num_rows > 0): ?>
+                                            <div class="trash-notes-list">
+                                                <?php while ($n_row = $nb_notes_res->fetch_assoc()):
+                                                    $trash_link = "dashboard.php?edit=" . $n_row['id'] . "&view=trash";
+                                                    ?>
+                                                    <a href="<?php echo $trash_link; ?>" class="trash-note-item"
+                                                        style="text-decoration:none;">
+                                                        <span class="trash-note-icon">•</span>
+                                                        <span
+                                                            class="trash-note-title"><?php echo $n_row['title'] ? htmlspecialchars($n_row['title']) : 'Untitled'; ?></span>
+                                                    </a>
+                                                <?php endwhile; ?>
+                                                <?php if ($nb_notes_res->num_rows >= 3)
+                                                    echo "<div class='trash-more-notes'>+ more notes inside</div>"; ?>
+                                            </div>
                                         <?php else: ?>
-                                            <!-- Move to Trash -->
-                                            <a href="javascript:void(0)" onclick="confirmDelete('<?php echo $trash_url; ?>')" class="action-icon-btn trash" title="Move to Trash">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                            </a>
+                                            <div class="trash-empty-msg">No notes in this notebook</div>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="trash-card-actions">
+                                        <a href="dashboard.php?restore_notebook=<?php echo $nb['id']; ?>"
+                                            class="btn-trash-action restore" title="Restore Notebook">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <polyline points="23 4 23 10 17 10"></polyline>
+                                                <polyline points="1 20 1 14 7 14"></polyline>
+                                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                                </path>
+                                            </svg>
+                                            Restore
+                                        </a>
+                                        <a href="javascript:void(0)"
+                                            onclick="openDeleteForeverModal('dashboard.php?delete_notebook_forever=<?php echo $nb['id']; ?>')"
+                                            class="btn-trash-action delete" title="Delete Forever">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path
+                                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                </path>
+                                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                                            </svg>
+                                            Delete
+                                        </a>
+                                    </div>
+                                </div>
+                                <?php
+                            }
+                            echo "</div>"; // End grid
+                            echo "<hr style='border:0; border-top:1px solid #333; margin:25px 0;'>";
+                        }
+
+                        // 2. TRASHED NOTES SECTION
+                        $result = $conn->query($sql_query);
+                        if ($result->num_rows > 0) {
+                            $has_items = true;
+                            if ($view_mode == 'trash')
+                                echo "<div style='padding:25px 20px 5px; font-size:0.75rem; color:#666; text-transform:uppercase; letter-spacing:1px;'>NOTES</div>";
+
+                            while ($row = $result->fetch_assoc()) {
+                                $active_class = ($row['id'] == $current_id) ? 'selected' : '';
+                                $edit_url = "dashboard.php?edit=" . $row['id'];
+                                if ($view_mode == 'notebook')
+                                    $edit_url .= "&notebook=" . $filter_notebook_id;
+                                if ($view_mode == 'trash')
+                                    $edit_url .= "&view=trash";
+                                if ($view_mode == 'notes')
+                                    $edit_url .= "&view=notes";
+
+                                $trash_url = "dashboard.php?trash_id=" . $row['id'];
+                                if ($view_mode == 'notebook')
+                                    $trash_url .= "&notebook=" . $filter_notebook_id;
+                                if ($view_mode == 'notes')
+                                    $trash_url .= "&view=notes";
+
+                                $snippet = substr(strip_tags($row['content']), 0, 50);
+                                if (strlen($row['content']) > 50)
+                                    $snippet .= "...";
+                                if (!$snippet)
+                                    $snippet = "No additional text";
+
+                                ?>
+                                <div class="note-item <?php echo $active_class; ?>"
+                                    onclick="window.location.href='<?php echo $edit_url; ?>'">
+                                    <div class="note-item-header"
+                                        style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+                                        <h4 style="flex-grow:1; margin:0; font-size:0.95rem; font-weight:600; color:#eee; <?php echo htmlspecialchars($row['title_style'] ?? ''); ?>"
+                                            id="sidebar-title-<?php echo $row['id']; ?>">
+                                            <?php echo $row['title'] ? htmlspecialchars($row['title']) : 'Untitled'; ?>
+                                        </h4>
+
+                                        <div class="note-item-actions" onclick="event.stopPropagation();"
+                                            style="display:flex; gap:8px;">
+                                            <?php if ($view_mode == 'trash'): ?>
+                                                <!-- Restore -->
+                                                <a href="dashboard.php?restore_id=<?php echo $row['id']; ?>"
+                                                    class="action-icon-btn restore" title="Restore">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                        stroke-linejoin="round">
+                                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                                    </svg>
+                                                </a>
+                                                <!-- Delete Forever -->
+                                                <a href="javascript:void(0)"
+                                                    onclick="openDeleteForeverModal('dashboard.php?delete_forever=<?php echo $row['id']; ?>')"
+                                                    class="action-icon-btn delete" title="Delete Forever">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                        stroke-linejoin="round">
+                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                        <path
+                                                            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                        </path>
+                                                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                                                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                                                    </svg>
+                                                </a>
+                                            <?php else: ?>
+                                                <!-- Move to Trash -->
+                                                <a href="javascript:void(0)" onclick="confirmDelete('<?php echo $trash_url; ?>')"
+                                                    class="action-icon-btn trash" title="Move to Trash">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                        stroke-linejoin="round">
+                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                        <path
+                                                            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                        </path>
+                                                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                                                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                                                    </svg>
+                                                </a>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+
+                                    <p class="note-snippet" id="sidebar-snippet-<?php echo $row['id']; ?>"
+                                        style="<?php echo htmlspecialchars($row['content_style'] ?? ''); ?>"><?php echo $snippet; ?>
+                                    </p>
+
+                                    <div class="note-card-footer">
+                                        <span class="note-meta">
+                                            <?php
+                                            if ($view_mode == 'trash')
+                                                echo "<span style='color:#e74c3c; font-size:0.75rem; font-weight:500;'>In Trash</span>";
+                                            else
+                                                echo date('M d', strtotime($row['created_at']));
+                                            ?>
+                                        </span>
+
+                                        <div
+                                            style="display:flex; gap:6px; margin-left:10px; flex-grow:1; justify-content:flex-end;">
+                                            <?php
+                                            if (!empty($row['tag_list'])) {
+                                                $tags_to_show = explode(',', $row['tag_list']);
+                                                $tag_limit = 2; // Show max 2 tags to avoid overflow
+                                                $count = 0;
+                                                foreach ($tags_to_show as $t_name) {
+                                                    if ($count >= $tag_limit)
+                                                        break;
+                                                    echo '<span class="tag-pill">#' . htmlspecialchars(trim($t_name)) . '</span>';
+                                                    $count++;
+                                                }
+                                                if (count($tags_to_show) > $tag_limit) {
+                                                    echo '<span class="tag-pill">+' . (count($tags_to_show) - $tag_limit) . '</span>';
+                                                }
+                                            }
+                                            ?>
+                                        </div>
+
+                                        <?php if (!empty($row['nb_name'])): ?>
+                                            <span class="note-item-badge">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24"
+                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round" style="margin-right:4px;">
+                                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                                </svg>
+                                                <?php echo htmlspecialchars($row['nb_name']); ?>
+                                            </span>
                                         <?php endif; ?>
                                     </div>
                                 </div>
-
-                                <p class="note-snippet" id="sidebar-snippet-<?php echo $row['id']; ?>" style="<?php echo htmlspecialchars($row['content_style'] ?? ''); ?>"><?php echo $snippet; ?></p>
-                                
-                                <div class="note-card-footer">
-                                    <span class="note-meta">
-                                        <?php
-                                        if ($view_mode == 'trash')
-                                            echo "<span style='color:#e74c3c; font-size:0.75rem; font-weight:500;'>In Trash</span>";
-                                        else
-                                            echo date('M d', strtotime($row['created_at']));
-                                        ?>
-                                    </span>
-                                    
-                                    <div style="display:flex; gap:6px; margin-left:10px; flex-grow:1; justify-content:flex-end;">
-                                        <?php 
-                                        if (!empty($row['tag_list'])) {
-                                            $tags_to_show = explode(',', $row['tag_list']);
-                                            $tag_limit = 2; // Show max 2 tags to avoid overflow
-                                            $count = 0;
-                                            foreach ($tags_to_show as $t_name) {
-                                                if($count >= $tag_limit) break;
-                                                echo '<span class="tag-pill">#' . htmlspecialchars(trim($t_name)) . '</span>';
-                                                $count++;
-                                            }
-                                            if(count($tags_to_show) > $tag_limit) {
-                                                echo '<span class="tag-pill">+' . (count($tags_to_show) - $tag_limit) . '</span>';
-                                            }
-                                        }
-                                        ?>
-                                    </div>
-                                    
-                                    <?php if(!empty($row['nb_name'])): ?>
-                                        <span class="note-item-badge">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-                                            <?php echo htmlspecialchars($row['nb_name']); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <?php
+                                <?php
+                            }
                         }
-                    }
 
-                    if (!$has_items) {
-                        if ($view_mode == 'trash') {
-                            echo '<div class="empty-state-container">
+                        if (!$has_items) {
+                            if ($view_mode == 'trash') {
+                                echo '<div class="empty-state-container">
                                 <div class="empty-trash-art">
                                     <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
                                         <defs>
@@ -1185,232 +1532,280 @@ elseif ($view_mode == 'notes')
                                 <div class="empty-state-title">Everything is Clean</div>
                                 <div class="empty-state-desc">Your trash is empty. No deleted notes here.</div>
                             </div>';
-                        } else {
-                            echo "<div class='empty-search-state'>
+                            } else {
+                                echo "<div class='empty-search-state'>
                                     <svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24' fill='none' stroke='#444' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'></circle><line x1='21' y1='21' x2='16.65' y2='16.65'></line></svg>
                                     <h3>No notes found</h3>
                                     <p>Try searching for something else.</p>
                                   </div>";
+                            }
                         }
-                    }
-                    ?>
+                        ?>
+                    </div>
                 </div>
-            </div>
 
-            <div class="editor-panel <?php echo (!$current_id && $view_mode == 'trash') ? 'dimmed-editor' : ''; ?>">
-                <form action="dashboard.php" method="POST" class="editor-form-element"
-                    style="height:100%; display:flex; flex-direction:column;">
-                    <?php if ($filter_notebook_id): ?>
-                        <input type="hidden" name="notebook" value="<?php echo $filter_notebook_id; ?>">
-                    <?php endif; ?>
-                    <?php if ($view_mode == 'notes'): ?>
-                        <input type="hidden" name="view" value="notes">
-                    <?php endif; ?>
+                <div class="editor-panel <?php echo (!$current_id && $view_mode == 'trash') ? 'dimmed-editor' : ''; ?>">
+                    <form action="dashboard.php" method="POST" class="editor-form-element"
+                        style="height:100%; display:flex; flex-direction:column;">
+                        <?php if ($filter_notebook_id): ?>
+                            <input type="hidden" name="notebook" value="<?php echo $filter_notebook_id; ?>">
+                        <?php endif; ?>
+                        <?php if ($view_mode == 'notes'): ?>
+                            <input type="hidden" name="view" value="notes">
+                        <?php endif; ?>
 
-                    <div class="editor-top-bar">
+                        <div class="editor-top-bar">
 
-                        <div class="editor-header-info">
-                            <div class="breadcrumbs">
-                                <span class="notebook-name">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;">
-                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                                    </svg>
-                                    <?php echo htmlspecialchars($current_notebook_name_display); ?></span>
-                                <span>›</span>
-                                <span><?php echo $current_title ? htmlspecialchars($current_title) : "Untitled"; ?></span>
+                            <div class="editor-header-info">
+                                <div class="breadcrumbs">
+                                    <span class="notebook-name">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round" style="margin-right:4px; vertical-align:text-bottom;">
+                                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                        </svg>
+                                        <?php echo htmlspecialchars($current_notebook_name_display); ?></span>
+                                    <span>›</span>
+                                    <span><?php echo $current_title ? htmlspecialchars($current_title) : "Untitled"; ?></span>
+                                </div>
+                                <div class="last-edited">Edited
+                                    <?php echo $current_updated_at ? $current_updated_at : "just now"; ?>
+                                </div>
                             </div>
-                            <div class="last-edited">Edited
-                                <?php echo $current_updated_at ? $current_updated_at : "just now"; ?>
-                            </div>
-                        </div>
 
-                        <div class="editor-actions">
-                            <?php if ($view_mode == 'trash'): ?>
-                                <input type="hidden" name="is_trash_mode" value="1">
+                            <div class="editor-actions">
+                                <?php if ($view_mode == 'trash'): ?>
+                                    <input type="hidden" name="is_trash_mode" value="1">
                                     <span class="badge-trash-warning">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path
+                                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                                            </path>
+                                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                        </svg>
                                         In Trash
                                     </span>
                                     <a href="dashboard.php?restore_id=<?php echo $current_id; ?>" class="btn-action-restore">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <polyline points="23 4 23 10 17 10"></polyline>
+                                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                        </svg>
                                         Restore
                                     </a>
-                                    <a href="javascript:void(0)" onclick="openDeleteForeverModal('dashboard.php?delete_forever=<?php echo $current_id; ?>')" class="btn-action-delete">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                        Delete
-                                    </a>
-                            <?php else: ?>
-
-                                <?php
-                                $display_label = "All Notes";
-                                $display_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
-                                $save_notebook_id = "0";
-                                if ($view_mode == 'notebook') {
-                                    $display_label = htmlspecialchars($filter_notebook_name);
-                                    $display_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>';
-                                    $save_notebook_id = $filter_notebook_id;
-                                } elseif ($view_mode == 'notes') {
-                                    $display_label = "Notes";
-                                    $display_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
-                                    $save_notebook_id = ($current_id) ? $editor_target_notebook_id : "0";
-                                } else {
-                                    $save_notebook_id = ($current_id) ? $editor_target_notebook_id : "0";
-                                }
-                                ?>
-
-                                <span class="notebook-badge">
-                                    <?php echo $display_icon . " " . $display_label; ?>
-                                </span>
-
-                                <input type="hidden" name="notebook_id" value="<?php echo $save_notebook_id; ?>">
-
-                                <!-- MOVED STATUS AND ATTACHMENT BUTTON OUTSIDE THE IF BLOCK -->
-                                <span id="save-status" style="margin-right:10px; font-size:0.8rem; color:#666; font-style:italic;"></span>
-                                
-                                <!-- Attachment Button -->
-                                <button type="button" class="btn-icon-trash" style="margin-right:5px;" onclick="document.getElementById('upload-input').click()">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <path
-                                            d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
-                                        </path>
-                                    </svg>
-                                </button>
-                                <input type="file" id="upload-input" name="attachment" style="display:none;" onchange="uploadFile(this)">
-
-                                <?php if ($current_id): ?>
-                                    <a href="dashboard.php?trash_id=<?php echo $current_id; ?>" class="btn-icon-trash">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                    <a href="javascript:void(0)"
+                                        onclick="openDeleteForeverModal('dashboard.php?delete_forever=<?php echo $current_id; ?>')"
+                                        class="btn-action-delete">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                             stroke-linejoin="round">
                                             <polyline points="3 6 5 6 21 6"></polyline>
-                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            <path
+                                                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                            </path>
+                                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                                            <line x1="14" y1="11" x2="14" y2="17"></line>
                                         </svg>
+                                        Delete
                                     </a>
-                                <?php endif; ?>
+                                <?php else: ?>
 
-                                <button type="submit" name="save_note" class="btn-save-green">Save Note</button>
-                            <?php endif; ?>
-                        </div>
+                                    <?php
+                                    $display_label = "All Notes";
+                                    $display_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
+                                    $save_notebook_id = "0";
+                                    if ($view_mode == 'notebook') {
+                                        $display_label = htmlspecialchars($filter_notebook_name);
+                                        $display_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>';
+                                        $save_notebook_id = $filter_notebook_id;
+                                    } elseif ($view_mode == 'notes') {
+                                        $display_label = "Notes";
+                                        $display_icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
+                                        $save_notebook_id = ($current_id) ? $editor_target_notebook_id : "0";
+                                    } else {
+                                        $save_notebook_id = ($current_id) ? $editor_target_notebook_id : "0";
+                                    }
+                                    ?>
 
-                    </div>
-                    
-                    <!-- CUSTOM TOOLBAR CONTAINER (Evernote Style) -->
-                    <div id="toolbar-container" class="toolbar-loading" style="visibility: hidden;">
-                        <span class="ql-formats">
-                            <select class="ql-font" style="width: 120px;">
-                                <option value="poppins" selected>Poppins</option>
-                                <option value="arial">Arial</option>
-                                <option value="calibri">Calibri</option>
-                                <option value="roboto">Roboto</option>
-                                <option value="opensans">Open Sans</option>
-                                <option value="montserrat">Montserrat</option>
-                                <option value="inter">Inter</option>
-                                <option value="lato">Lato</option>
-                                <option value="verdana">Verdana</option>
-                                <option value="georgia">Georgia</option>
-                                <option value="serif">Serif</option>
-                                <option value="monospace">Monospace</option>
-                            </select>
-                        </span>
-                        <span class="ql-formats">
-                            <select class="ql-header">
-                                <option value="1">Heading 1</option>
-                                <option value="2">Heading 2</option>
-                                <option selected>Normal</option>
-                            </select>
-                        </span>
-                        <span class="ql-formats">
-                            <button class="ql-bold"></button>
-                            <button class="ql-italic"></button>
-                            <button class="ql-underline"></button>
-                            <button class="ql-strike"></button>
-                        </span>
-                        <span class="ql-formats">
-                            <button class="ql-list" value="ordered"></button>
-                            <button class="ql-list" value="bullet"></button>
-                        </span>
-                        <span class="ql-formats">
-                            <button class="ql-blockquote"></button>
-                            <button class="ql-code-block"></button>
-                        </span>
-                        <span class="ql-formats">
-                            <button class="ql-clean"></button>
-                        </span>
-                    </div>
+                                    <span class="notebook-badge">
+                                        <?php echo $display_icon . " " . $display_label; ?>
+                                    </span>
 
-                    <div class="editor-form-inner">
-                    <input type="hidden" name="id" value="<?php echo $current_id; ?>">
-                    <input type="hidden" name="title_style" id="title-style-input" value="<?php echo htmlspecialchars($current_title_style); ?>">
-                    <input type="hidden" name="content_style" id="content-style-input" value="<?php echo htmlspecialchars($current_content_style); ?>"> <!-- NEW -->
-                    <input type="text" name="title" class="editor-title" placeholder="Title"
-                        value="<?php echo htmlspecialchars($current_title); ?>" 
-                        style="<?php echo htmlspecialchars($current_title_style); ?>"
-                        <?php echo ($view_mode == 'trash') ? 'readonly' : ''; ?>>
+                                    <input type="hidden" name="notebook_id" value="<?php echo $save_notebook_id; ?>">
 
-                    <!-- TAGS INPUT -->
-                    <input type="text" name="tags" class="editor-tags" placeholder="Add tags (separated by comma)..."
-                        value="<?php echo htmlspecialchars($current_tags); ?>" <?php echo ($view_mode == 'trash') ? 'readonly' : ''; ?>>
-                    
-                    <!-- ATTACHMENTS LIST -->
-                    <div id="attachments-container" style="padding: 0 40px; margin-bottom: 10px; display:flex; flex-wrap:wrap; gap:10px;">
-                        <?php if(isset($current_attachments) && !empty($current_attachments)): ?>
-                            <?php foreach($current_attachments as $att): 
-                                $ext = strtolower(pathinfo($att['original_name'], PATHINFO_EXTENSION));
-                                $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
-                            ?>
-                                <div class="att-chip" id="att-<?php echo $att['id']; ?>" style="display:flex; align-items:center; background:#333; padding:5px 10px; border-radius:15px; font-size:0.85rem;">
-                                    <span style="margin-right:5px; display:flex;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                    <!-- MOVED STATUS AND ATTACHMENT BUTTON OUTSIDE THE IF BLOCK -->
+                                    <span id="save-status"
+                                        style="margin-right:10px; font-size:0.8rem; color:#666; font-style:italic;"></span>
+
+                                    <!-- Attachment Button -->
+                                    <button type="button" class="btn-icon-trash" style="margin-right:5px;"
+                                        onclick="document.getElementById('upload-input').click()">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
                                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                                             stroke-linejoin="round">
                                             <path
                                                 d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
                                             </path>
                                         </svg>
-                                    </span>
-                                    <?php if($is_image): ?>
-                                        <a href="javascript:void(0)" onclick="viewImage('<?php echo htmlspecialchars($att['file_path']); ?>')" style="color:#ddd; text-decoration:none; margin-right:8px; border-bottom:1px dashed #666;"><?php echo htmlspecialchars($att['original_name']); ?></a>
-                                    <?php else: ?>
-                                        <a href="<?php echo htmlspecialchars($att['file_path']); ?>" target="_blank" style="color:#ddd; text-decoration:none; margin-right:8px;"><?php echo htmlspecialchars($att['original_name']); ?></a>
+                                    </button>
+                                    <input type="file" id="upload-input" name="attachment" style="display:none;"
+                                        onchange="uploadFile(this)">
+
+                                    <?php if ($current_id): ?>
+                                        <a href="dashboard.php?trash_id=<?php echo $current_id; ?>" class="btn-icon-trash">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path
+                                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                                </path>
+                                            </svg>
+                                        </a>
                                     <?php endif; ?>
-                                    <span style="cursor:pointer; color:#888; display:flex; align-items:center;" onclick="deleteAttachment(<?php echo $att['id']; ?>)">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                    </span>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
 
-                    <!-- Hidden input to store Quill HTML -->
-                    <input type="hidden" name="content" value="<?php echo htmlspecialchars($current_content); ?>">
+                                    <button type="submit" name="save_note" class="btn-save-green">Save Note</button>
+                                <?php endif; ?>
+                            </div>
 
-                    <!-- Quill Editor Container -->
-                    <div id="editor-container" style="flex-grow:1; border:none;"><?php echo $current_content; ?></div>
+                        </div>
 
-                </form>
-            </div>
+                        <!-- CUSTOM TOOLBAR CONTAINER (Evernote Style) -->
+                        <div id="toolbar-container" class="toolbar-loading" style="visibility: hidden;">
+                            <span class="ql-formats">
+                                <select class="ql-font" style="width: 120px;">
+                                    <option value="poppins" selected>Poppins</option>
+                                    <option value="arial">Arial</option>
+                                    <option value="calibri">Calibri</option>
+                                    <option value="roboto">Roboto</option>
+                                    <option value="opensans">Open Sans</option>
+                                    <option value="montserrat">Montserrat</option>
+                                    <option value="inter">Inter</option>
+                                    <option value="lato">Lato</option>
+                                    <option value="verdana">Verdana</option>
+                                    <option value="georgia">Georgia</option>
+                                    <option value="serif">Serif</option>
+                                    <option value="monospace">Monospace</option>
+                                </select>
+                            </span>
+                            <span class="ql-formats">
+                                <select class="ql-header">
+                                    <option value="1">Heading 1</option>
+                                    <option value="2">Heading 2</option>
+                                    <option selected>Normal</option>
+                                </select>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-bold"></button>
+                                <button class="ql-italic"></button>
+                                <button class="ql-underline"></button>
+                                <button class="ql-strike"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-list" value="ordered"></button>
+                                <button class="ql-list" value="bullet"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-blockquote"></button>
+                                <button class="ql-code-block"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-clean"></button>
+                            </span>
+                        </div>
 
-        <?php endif; ?>
+                        <div class="editor-form-inner">
+                            <input type="hidden" name="id" value="<?php echo $current_id; ?>">
+                            <input type="hidden" name="title_style" id="title-style-input"
+                                value="<?php echo htmlspecialchars($current_title_style); ?>">
+                            <input type="hidden" name="content_style" id="content-style-input"
+                                value="<?php echo htmlspecialchars($current_content_style); ?>"> <!-- NEW -->
+                            <input type="text" name="title" class="editor-title" placeholder="Title"
+                                value="<?php echo htmlspecialchars($current_title); ?>"
+                                style="<?php echo htmlspecialchars($current_title_style); ?>" <?php echo ($view_mode == 'trash') ? 'readonly' : ''; ?>>
 
-    </div>
+                            <!-- TAGS INPUT -->
+                            <input type="text" name="tags" class="editor-tags"
+                                placeholder="Add tags (separated by comma)..."
+                                value="<?php echo htmlspecialchars($current_tags); ?>" <?php echo ($view_mode == 'trash') ? 'readonly' : ''; ?>>
 
+                            <!-- ATTACHMENTS LIST -->
+                            <div id="attachments-container"
+                                style="padding: 0 40px; margin-bottom: 10px; display:flex; flex-wrap:wrap; gap:10px;">
+                                <?php if (isset($current_attachments) && !empty($current_attachments)): ?>
+                                    <?php foreach ($current_attachments as $att):
+                                        $ext = strtolower(pathinfo($att['original_name'], PATHINFO_EXTENSION));
+                                        $is_image = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+                                        ?>
+                                        <div class="att-chip" id="att-<?php echo $att['id']; ?>"
+                                            style="display:flex; align-items:center; background:#333; padding:5px 10px; border-radius:15px; font-size:0.85rem;">
+                                            <span style="margin-right:5px; display:flex;">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <path
+                                                        d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
+                                                    </path>
+                                                </svg>
+                                            </span>
+                                            <?php if ($is_image): ?>
+                                                <a href="javascript:void(0)"
+                                                    onclick="viewImage('<?php echo htmlspecialchars($att['file_path']); ?>')"
+                                                    style="color:#ddd; text-decoration:none; margin-right:8px; border-bottom:1px dashed #666;"><?php echo htmlspecialchars($att['original_name']); ?></a>
+                                            <?php else: ?>
+                                                <a href="<?php echo htmlspecialchars($att['file_path']); ?>" target="_blank"
+                                                    style="color:#ddd; text-decoration:none; margin-right:8px;"><?php echo htmlspecialchars($att['original_name']); ?></a>
+                                            <?php endif; ?>
+                                            <span style="cursor:pointer; color:#888; display:flex; align-items:center;"
+                                                onclick="deleteAttachment(<?php echo $att['id']; ?>)">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
 
-    <!-- Image Preview Modal -->
-    <div id="verify-image-modal" class="modal-overlay" onclick="closeImageModal()">
-        <div class="img-modal-content" onclick="event.stopPropagation()">
-            <button class="close-img-modal" onclick="closeImageModal()">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-            <img id="preview-img-tag" src="">
-            <a id="preview-dl-link" href="" download class="img-download-link">Download Original</a>
+                            <!-- Hidden input to store Quill HTML -->
+                            <input type="hidden" name="content" value="<?php echo htmlspecialchars($current_content); ?>">
+
+                            <!-- Quill Editor Container -->
+                            <div id="editor-container" style="flex-grow:1; border:none;"><?php echo $current_content; ?>
+                            </div>
+
+                    </form>
+                </div>
+
+            <?php endif; ?>
+
         </div>
-    </div>
 
-    <script src="assets/js/dashboard.js?v=<?php echo time(); ?>"></script>
+
+        <!-- Image Preview Modal -->
+        <div id="verify-image-modal" class="modal-overlay" onclick="closeImageModal()">
+            <div class="img-modal-content" onclick="event.stopPropagation()">
+                <button class="close-img-modal" onclick="closeImageModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+                <img id="preview-img-tag" src="">
+                <a id="preview-dl-link" href="" download class="img-download-link">Download Original</a>
+            </div>
+        </div>
+
+        <script src="assets/js/dashboard.js?v=<?php echo time(); ?>"></script>
 </body>
+
 </html>

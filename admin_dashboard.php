@@ -45,13 +45,17 @@ $db_size = getDatabaseSize($conn, 'quicknote_db'); // Replace with actual DB nam
 $total_size = $upload_size + $db_size;
 
 $disk_usage = formatBytes($total_size);
+// Use View for Stats (ADS Requirement)
+$stats_res = $conn->query("SELECT * FROM view_dashboard_stats");
+$view_data = $stats_res->fetch_assoc();
+
 $stats = [
-    'users' => $conn->query("SELECT COUNT(*) as c FROM users")->fetch_assoc()['c'],
-    'notes' => $conn->query("SELECT COUNT(*) as c FROM notes")->fetch_assoc()['c'],
-    'notebooks' => $conn->query("SELECT COUNT(*) as c FROM notebooks")->fetch_assoc()['c'],
-    'storage' => $disk_usage,
-    'db_size' => formatBytes($db_size), // Optional for detail
-    'file_size' => formatBytes($upload_size) // Optional for detail
+    'users' => $view_data['total_users'],
+    'notes' => $view_data['active_notes'],
+    'notebooks' => $view_data['active_notebooks'],
+    'storage' => formatBytes($view_data['total_storage_bytes']),
+    'db_size' => formatBytes($db_size),
+    'file_size' => formatBytes($view_data['total_storage_bytes'])
 ];
 
 ?>
