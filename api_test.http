@@ -1,0 +1,57 @@
+### 1. Variables
+@baseUrl = http://localhost/YEAR%203/baby%20folderr/MINI-PROJ-ADS/api
+@email = api_tester@example.com
+@password = password123
+
+### 2. Register User (First Time Only)
+POST {{baseUrl}}/auth.php?action=register
+Content-Type: application/json
+
+{
+    "username": "api_tester",
+    "email": "{{email}}",
+    "password": "{{password}}"
+}
+
+### 3. Login (To get User ID if we generated session, but here we just verify creds)
+# Note: In this simple API, we will manually copy the returned 'id' to the variable below
+POST {{baseUrl}}/auth.php?action=login
+Content-Type: application/json
+
+{
+    "email": "{{email}}",
+    "password": "{{password}}"
+}
+
+### Set User ID manually after login for subsequent requests
+@userId = 55
+
+### 4. Create Notebook
+POST {{baseUrl}}/notebooks.php?user_id={{userId}}
+Content-Type: application/json
+
+{
+    "name": "API Notebook",
+    "description": "Created via REST API"
+}
+
+### 5. List Notebooks
+GET {{baseUrl}}/notebooks.php?user_id={{userId}}
+
+### 6. Create Note (Uses Stored Procedure)
+# Ensure notebook_id is valid from step 5, or use 0 for loose note
+POST {{baseUrl}}/notes.php?user_id={{userId}}
+Content-Type: application/json
+
+{
+    "title": "My API Note",
+    "content": "This note was created using sp_create_note via the REST API.",
+    "notebook_id": 0
+}
+
+### 7. List Notes
+GET {{baseUrl}}/notes.php?user_id={{userId}}
+
+### 8. Delete Notebook (Cascades)
+# Replace ID with one created in Step 4
+DELETE {{baseUrl}}/notebooks.php?user_id={{userId}}&id=10
